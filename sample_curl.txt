@@ -1,0 +1,4 @@
+curl -X POST https://YOUR-LIVE-URL/api/scam-event \
+-H "Content-Type: application/json" \
+-H "x-api-key: YOUR_SECRET_API_KEY" \
+-d @sample_request.json

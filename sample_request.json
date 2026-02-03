@@ -1,0 +1,14 @@
+{
+  "sessionId": "demo-session-1",
+  "message": {
+    "sender": "scammer",
+    "text": "Your bank account will be blocked today. Verify immediately.",
+    "timestamp": 1770005528731
+  },
+  "conversationHistory": [],
+  "metadata": {
+    "channel": "SMS",
+    "language": "English",
+    "locale": "IN"
+  }
+}
