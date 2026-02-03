@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, Body
+from fastapi import FastAPI, Depends, Request
 from auth import verify_api_key
 from scam_detector import is_scam
 from agent import generate_reply
@@ -7,27 +7,29 @@ from extractor import extract_intelligence
 from callback import send_callback
 
 app = FastAPI()
-
-# In-memory intelligence store
 intelligence_store = {}
 
 
 @app.get("/api/scam-event")
 def health_check():
-    # For GUVI / uptime / reachability tests
-    return {
-        "status": "success",
-        "message": "Honeypot endpoint is live"
-    }
+    return {"status": "success", "message": "Honeypot endpoint is live"}
 
 
 @app.post("/api/scam-event")
-def scam_event(
-    data: dict = Body(default=None),
+async def scam_event(
+    request: Request,
     api_key=Depends(verify_api_key)
 ):
-    # 🔹 Handle empty / invalid body (GUVI tester fix)
-    if not data or "message" not in data or "sessionId" not in data:
+    # 🔥 RAW BODY HANDLING (GUVI FIX)
+    try:
+        data = await request.json()
+    except Exception:
+        return {
+            "status": "success",
+            "reply": "Endpoint reachable and authenticated."
+        }
+
+    if not isinstance(data, dict) or "message" not in data or "sessionId" not in data:
         return {
             "status": "success",
             "reply": "Endpoint reachable and authenticated."
@@ -36,25 +38,18 @@ def scam_event(
     session_id = data["sessionId"]
     msg = data["message"]
 
-    # Ensure required fields exist
-    if "text" not in msg or "sender" not in msg or "timestamp" not in msg:
+    if not all(k in msg for k in ("text", "sender", "timestamp")):
         return {
             "status": "success",
             "reply": "Invalid message format handled."
         }
 
-    # Conversation memory
     history = get_history(session_id)
     update_history(session_id, msg["sender"], msg["text"], msg["timestamp"])
 
-    # Non-scam flow
     if not is_scam(msg["text"]):
-        return {
-            "status": "success",
-            "reply": "Okay, thanks for informing."
-        }
+        return {"status": "success", "reply": "Okay, thanks for informing."}
 
-    # Initialize intelligence store per session
     intelligence_store.setdefault(session_id, {
         "bankAccounts": [],
         "upiIds": [],
@@ -63,14 +58,11 @@ def scam_event(
         "suspiciousKeywords": []
     })
 
-    # Extract intelligence
     extract_intelligence(msg["text"], intelligence_store[session_id])
 
-    # Generate agent reply
     reply = generate_reply(history + [msg])
     update_history(session_id, "user", reply, msg["timestamp"])
 
-    # Final callback after sufficient engagement
     if len(get_history(session_id)) >= 8:
         send_callback(
             session_id=session_id,
@@ -78,7 +70,4 @@ def scam_event(
             intelligence=intelligence_store[session_id]
         )
 
-    return {
-        "status": "success",
-        "reply": reply
-    }
+    return {"status": "success", "reply": reply}
